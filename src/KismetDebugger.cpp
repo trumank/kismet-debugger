@@ -303,7 +303,7 @@ namespace RC::GUI::KismetDebugger
         }
         catch (std::exception& e)
         {
-            std::cout << "failed to load breakpoints" << std::endl << e.what() << std::endl;
+            Output::send<LogLevel::Warning>(STR("[KismetDebugger]: Failed to load breakpoints: {}\n"), to_wstring(e.what()));
         }
 
         // scan for GNatives if it hasn't been found yet
