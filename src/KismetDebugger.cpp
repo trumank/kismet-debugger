@@ -458,21 +458,21 @@ namespace RC::GUI::KismetDebugger
                 if (context && context->stack->Node() == current_fn)
                 {
                     UFunction* node = context->stack->Node();
-                    current_fn->ForEachProperty([&](FProperty* property) {
+                    for (FProperty* property : current_fn->ForEachProperty())
+                    {
                         FString text{};
                         auto container_ptr = property->ContainerPtrToValuePtr<void*>(context->stack->Locals());
                         property->ExportTextItem(text, container_ptr, container_ptr, static_cast<UObject*>(node), NULL);
 
                         ImGui::Text("%s = %S", to_string(property->GetName()).c_str(), text.GetCharArray());
-                        return LoopAction::Continue;
-                    });
+                    }
                 }
                 else
                 {
-                    current_fn->ForEachProperty([&](FProperty* property) {
+                    for (FProperty* property : current_fn->ForEachProperty())
+                    {
                         ImGui::Text("%s", to_string(property->GetName()).c_str());
-                        return LoopAction::Continue;
-                    });
+                    }
                 }
                 ImGui::EndChild();
             }
