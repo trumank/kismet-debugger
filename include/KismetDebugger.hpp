@@ -50,6 +50,10 @@ namespace RC::GUI::KismetDebugger
     public:
         Debugger();
         ~Debugger();
+
+        auto enable() -> void;
+        auto disable() -> void;
+
         auto render() -> void;
         auto render_nav_bar(float width) -> void;
 

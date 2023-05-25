@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <iostream>
 #include <thread>
+#include <ranges>
 
 #include <DynamicOutput/DynamicOutput.hpp>
 #include <Helpers/String.hpp>
@@ -16,6 +17,8 @@
 #include <Unreal/TArray.hpp>
 #include <Unreal/FFrame.hpp>
 #include <Unreal/ReflectedFunction.hpp>
+#include <Unreal/Signatures.hpp>
+#include <SigScanner/SinglePassSigScanner.hpp>
 
 #define RC_JSON_BUILD_STATIC
 #include <JSON/Parser/Parser.hpp>
@@ -31,7 +34,7 @@ namespace RC::GUI::KismetDebugger
     using namespace RC::Unreal;
 
     FNativeFuncPtr GNativesOriginal[EExprToken::EX_Max];
-    FNativeFuncPtr* GNatives = (FNativeFuncPtr*)0x1460a7510;
+    FNativeFuncPtr* GNatives = nullptr;
     volatile bool is_hooked = false; // cannot hook *immediately* as GNatives is populated at runtime
 
     volatile bool should_pause = false;
@@ -288,6 +291,83 @@ namespace RC::GUI::KismetDebugger
         return SplitterBehavior(bb, id, split_vertically ? ImGuiAxis_X : ImGuiAxis_Y, size1, size2, min_size1, min_size2, 0.0f);
     }
 
+    auto Debugger::enable() -> void
+    {
+        // do a bunch of setup on enable rather than mod init because a lot of things aren't ready at mod init
+
+        // hack to delay breakpoint loading because working directory changes at some point during load
+        try
+        {
+            std::filesystem::path path("breakpoints.json");
+            m_breakpoints.load(path);
+        }
+        catch (std::exception& e)
+        {
+            std::cout << "failed to load breakpoints" << std::endl << e.what() << std::endl;
+        }
+
+        // scan for GNatives if it hasn't been found yet
+        if (GNatives == nullptr)
+        {
+            SignatureContainer guobjectarray = [&]() -> SignatureContainer {
+                return {
+                    { { "CC 51 20 01" } }, // unique constant in UObject::CallFunction
+                    [&](SignatureContainer& self) {
+                        uint8_t* data = static_cast<uint8_t*>(self.get_match_address());
+                        for (uint8_t* i : std::views::iota(data) | std::views::take(500))
+                        {
+                            // look for LEA instruction within the function body
+                            if (i[0] == 0x4c && i[1] == 0x8d && i[2] == 0x25)
+                            {
+                                // LEA found, resolve relative jump
+                                int32_t jmp;
+                                memcpy(&jmp, i + 3, sizeof(jmp));
+
+                                GNatives = reinterpret_cast<FNativeFuncPtr*>(i + 3 + 4 + jmp);
+
+                                Output::send(STR("[KismetDebugger]: GNatives address: {}\n"), static_cast<void*>(GNatives));
+
+                                self.get_did_succeed() = true;
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    },
+                    [&](const SignatureContainer& self) {
+                        if (!self.get_did_succeed())
+                        {
+                            Output::send<LogLevel::Warning>(STR("[KismetDebugger]: GNatives not found. Unable to hook.\n"));
+                        }
+                    }
+                };
+            }();
+
+            SinglePassScanner::SignatureContainerMap container_map;
+            std::vector<SignatureContainer> container;
+            container.emplace_back(guobjectarray);
+            container_map.emplace(ScanTarget::Core, container);
+            SinglePassScanner::start_scan(container_map);
+        }
+
+        if (GNatives != nullptr)
+        {
+            // finally actually enable the debugger
+            hook_all<EExprToken::EX_Max>();
+            is_hooked = true;
+        }
+    }
+    auto Debugger::disable() -> void
+    {
+        for (int i = 0; i < EExprToken::EX_Max; i++)
+        {
+            GNatives[i] = GNativesOriginal[i];
+        }
+        is_hooked = false;
+        should_pause = false;
+        should_next = false;
+    }
+
     auto Debugger::render() -> void
     {
         std::scoped_lock lock(context_mutex);
@@ -315,29 +395,11 @@ namespace RC::GUI::KismetDebugger
         {
             if (is_hooked)
             {
-                for (int i = 0; i < EExprToken::EX_Max; i++)
-                {
-                    GNatives[i] = GNativesOriginal[i];
-                }
-                is_hooked = false;
-                should_pause = false;
-                should_next = false;
+                disable();
             }
             else
             {
-                // hack to delay breaking loading because working directory changes at some point during load
-                try
-                {
-                    std::filesystem::path path("breakpoints.json");
-                    m_breakpoints.load(path);
-                }
-                catch (std::exception& e)
-                {
-                    std::cout << "failed to load breakpoints" << std::endl << e.what() << std::endl;
-                }
-
-                hook_all<EExprToken::EX_Max>();
-                is_hooked = true;
+                enable();
             }
         }
         if (is_hooked)
