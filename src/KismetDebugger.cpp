@@ -417,7 +417,7 @@ namespace RC::GUI::KismetDebugger
                 }
 
                 UFunction* node = ctx->stack->Node();
-                size_t index = ctx->stack->Code() - node->GetScript().GetData();
+                size_t index = ctx->stack->Code() - node->GetScript().GetData() - 1;
                 ImGui::Text("paused @ %s", expr_to_string(ctx->expr));
                 ImGui::Text("index @ %i", index);
                 ImGui::Text("object context = %s", to_string(ctx->context->GetFullName()).c_str());
