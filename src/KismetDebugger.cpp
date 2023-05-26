@@ -309,7 +309,7 @@ namespace RC::GUI::KismetDebugger
         // scan for GNatives if it hasn't been found yet
         if (GNatives == nullptr)
         {
-            SignatureContainer guobjectarray = [&]() -> SignatureContainer {
+            SignatureContainer gnatives = [&]() -> SignatureContainer {
                 return {
                     { { "CC 51 20 01" } }, // unique constant in UObject::CallFunction
                     [&](SignatureContainer& self) {
@@ -317,7 +317,7 @@ namespace RC::GUI::KismetDebugger
                         for (uint8_t* i : std::views::iota(data) | std::views::take(500))
                         {
                             // look for LEA instruction within the function body
-                            if (i[0] == 0x4c && i[1] == 0x8d && i[2] == 0x25)
+                            if (i[0] == 0x4c && i[1] == 0x8d && ((i[2] & 0xc7) == 5) && i[2] > 0x20)
                             {
                                 // LEA found, resolve relative jump
                                 int32_t jmp;
@@ -331,6 +331,7 @@ namespace RC::GUI::KismetDebugger
                                 return true;
                             }
                         }
+                        Output::send(STR("[KismetDebugger]: GNatives: no LEA instruction found\n"));
 
                         return false;
                     },
@@ -345,7 +346,7 @@ namespace RC::GUI::KismetDebugger
 
             SinglePassScanner::SignatureContainerMap container_map;
             std::vector<SignatureContainer> container;
-            container.emplace_back(guobjectarray);
+            container.emplace_back(gnatives);
             container_map.emplace(ScanTarget::Core, container);
             SinglePassScanner::start_scan(container_map);
         }
