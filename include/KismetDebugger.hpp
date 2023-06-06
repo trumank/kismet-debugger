@@ -18,9 +18,9 @@ namespace RC::GUI::KismetDebugger
 
     struct PausedContext
     {
-        EExprToken expr;
-        UObject* context;
-        FFrame* stack;
+        EExprToken expr{};
+        UObject* context{};
+        FFrame* stack{};
     };
 
     class BreakpointStore
@@ -38,11 +38,11 @@ namespace RC::GUI::KismetDebugger
         auto remove_breakpoint(UFunction* fn, size_t index) -> void;
 
     private:
-        std::optional<std::filesystem::path> m_save_path;
+        std::optional<std::filesystem::path> m_save_path{};
         typedef std::unordered_set<size_t> FunctionBreakpoints;
 
-        std::unordered_map<UFunction*, std::shared_ptr<FunctionBreakpoints> > m_breakpoints_by_function;
-        std::unordered_map<std::wstring, std::shared_ptr<FunctionBreakpoints> > m_breakpoints_by_name;
+        std::unordered_map<UFunction*, std::shared_ptr<FunctionBreakpoints> > m_breakpoints_by_function{};
+        std::unordered_map<std::wstring, std::shared_ptr<FunctionBreakpoints> > m_breakpoints_by_name{};
     };
 
     class Debugger
@@ -61,7 +61,7 @@ namespace RC::GUI::KismetDebugger
         auto nav_to_function(std::string full_name) -> void;
 
     private:
-        bool m_paused;
+        bool m_paused{};
 
         // std::string because it's used primarily with ImGui
         std::unordered_map<std::string, UFunction*> m_function_name_map{};
@@ -112,17 +112,17 @@ namespace RC::GUI::KismetDebugger
 
     private:
         std::optional<PausedContext>& m_paused_context;
-        UFunction* m_fn;
+        UFunction* m_fn{};
 
-        bool m_scroll_to_active;
+        bool m_scroll_to_active{};
         BreakpointStore& m_breakpoints;
 
         int m_indent{0};
 
-        uint8_t* m_script;
-        int m_script_size;
-        int m_index;
-        int m_cur; // or -1
+        uint8_t* m_script{};
+        int m_script_size{};
+        int m_index{};
+        int m_cur{}; // or -1
     };
 }
 
