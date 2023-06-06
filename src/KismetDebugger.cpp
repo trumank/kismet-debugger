@@ -731,6 +731,8 @@ namespace RC::GUI::KismetDebugger
                 return "EX_Int64Const";
             case EX_UInt64Const:
                 return "EX_UInt64Const";
+            case EX_DoubleConst:
+                return "EX_DoubleConst";
             case EX_Cast: // EX_PrimitiveCast in 4.27
                 return "EX_Cast";
             case EX_SetSet:
@@ -1108,6 +1110,11 @@ namespace RC::GUI::KismetDebugger
             case EX_UInt64Const:
             {
                 ImGui::Text("%u", read<uint64_t>());
+                break;
+            }
+            case EX_DoubleConst:
+            {
+                ImGui::Text("%f", read<double>());
                 break;
             }
             case EX_SkipOffsetConst:
