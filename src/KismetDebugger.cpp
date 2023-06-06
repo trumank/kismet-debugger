@@ -509,8 +509,6 @@ namespace RC::GUI::KismetDebugger
             }
         }
 
-        ImGui::EndChild();
-
         if (!is_hooked || !context)
             m_last_code = nullptr;
     }
