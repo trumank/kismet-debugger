@@ -123,6 +123,7 @@ namespace RC::GUI::KismetDebugger
         int m_script_size{};
         int m_index{};
         int m_cur{}; // or -1
+        EExprToken m_current_expr{};
     };
 }
 

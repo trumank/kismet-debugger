@@ -18,6 +18,7 @@
 #include <Unreal/FFrame.hpp>
 #include <Unreal/ReflectedFunction.hpp>
 #include <Unreal/Signatures.hpp>
+#include <Unreal/Property/FObjectProperty.hpp>
 #include <SigScanner/SinglePassSigScanner.hpp>
 
 #define RC_JSON_BUILD_STATIC
@@ -369,6 +370,58 @@ namespace RC::GUI::KismetDebugger
         should_next = false;
     }
 
+    auto get_object_address(FProperty* property, EExprToken expr, auto in_context) -> void*
+    {
+        void* container{};
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(in_context)>, std::optional<PausedContext>>)
+        {
+            if (!in_context.has_value()) { return nullptr; };
+            const auto& context = in_context.value();
+            if (expr == EX_InstanceVariable)
+            {
+                container = context.context;
+            }
+            else if (expr == EX_LocalVariable)
+            {
+                container = context.stack->Locals();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }
+        else
+        {
+            container = in_context;
+        }
+        return *property->ContainerPtrToValuePtr<void*>(container);
+    }
+
+    static auto try_rendering_property_context_menu(UFunction* fn, int index, FProperty* property, EExprToken expr, auto context) -> void
+    {
+        if (property->IsA<FObjectProperty>())
+        {
+            if (auto data_ptr = get_object_address(property, expr, context); data_ptr)
+            {
+                auto popup_context_name = to_string(std::format(STR("{}-{}-{}"), static_cast<void*>(fn), index, static_cast<void*>(property)));
+                if (ImGui::BeginPopupContextItem(popup_context_name.c_str()))
+                {
+                    if (ImGui::MenuItem("Copy address"))
+                    {
+                        ImGui::SetClipboardText(std::format("{}", data_ptr).c_str());
+                    }
+                    ImGui::EndPopup();
+                }
+                if (ImGui::IsItemHovered())
+                {
+                    ImGui::BeginTooltip();
+                    ImGui::Text("0x%p", data_ptr);
+                    ImGui::EndTooltip();
+                }
+            }
+        }
+    }
+
     auto Debugger::render() -> void
     {
         std::scoped_lock lock(context_mutex);
@@ -459,6 +512,7 @@ namespace RC::GUI::KismetDebugger
                 if (context && context->stack->Node() == current_fn)
                 {
                     UFunction* node = context->stack->Node();
+                    int property_count{};
                     for (FProperty* property : current_fn->ForEachProperty())
                     {
                         FString text{};
@@ -466,6 +520,8 @@ namespace RC::GUI::KismetDebugger
                         property->ExportTextItem(text, container_ptr, container_ptr, static_cast<UObject*>(node), NULL);
 
                         ImGui::Text("%s = %S", to_string(property->GetName()).c_str(), text.GetCharArray());
+                        try_rendering_property_context_menu(node, property_count, property, EX_Nothing, context->stack->Locals());
+                        ++property_count;
                     }
                 }
                 else
@@ -857,6 +913,10 @@ namespace RC::GUI::KismetDebugger
         if (property)
         {
             ImGui::Text("%s", to_string(property->GetName()).c_str());
+            if (m_paused_context.has_value())
+            {
+                try_rendering_property_context_menu(m_fn, m_index, property, m_current_expr, m_paused_context);
+            }
             /*
             if (ImGui::IsItemHovered())
             {
@@ -885,9 +945,9 @@ namespace RC::GUI::KismetDebugger
         bool active = m_index == m_cur;
         size_t expr_index = m_index;
 
-        EExprToken expr = (EExprToken)read<uint8_t>();
+        m_current_expr = static_cast<EExprToken>(read<uint8_t>());
 
-        //std::cout << "rendering (" << std::hex << unsigned(expr) << std::dec << ") @ " << (index - 1) << " " << expr_to_string(expr) << std::endl;
+        //std::cout << "rendering (" << std::hex << unsigned(m_current_expr) << std::dec << ") @ " << (index - 1) << " " << expr_to_string(m_current_expr) << std::endl;
 
 
         ImGui::SetCursorPosX(ImGui::GetCursorStartPos().x);
@@ -911,14 +971,14 @@ namespace RC::GUI::KismetDebugger
             if (m_scroll_to_active)
                 ImGui::SetScrollHereY();
         }
-        ImGui::Text("%s", expr_to_string(expr));
+        ImGui::Text("%s", expr_to_string(m_current_expr));
         if (active)
             ImGui::PopStyleColor();
 
         m_indent++;
         ImGui::SetCursorPosX(50 + m_indent * 20.0f);
 
-        switch(expr)
+        switch(m_current_expr)
         {
             case EX_Cast:
             {
@@ -1340,13 +1400,13 @@ namespace RC::GUI::KismetDebugger
             {
                 // This should never occur.
                 //UE_LOG(LogScriptSerialization, Warning, TEXT("Error: Unknown bytecode 0x%02X; ignoring it"), (uint8)Expr );
-                std::cout << "unknown expr (" << unsigned(expr) << ") " << expr_to_string(expr) << std::endl;
-                ImGui::Text("unknown expr (%i) %s", unsigned(expr), expr_to_string(expr));
+                std::cout << "unknown expr (" << unsigned(m_current_expr) << ") " << expr_to_string(m_current_expr) << std::endl;
+                ImGui::Text("unknown expr (%i) %s", unsigned(m_current_expr), expr_to_string(m_current_expr));
                 break;
             }
         }
         m_indent--;
-        return expr;
+        return m_current_expr;
     }
 
 }
