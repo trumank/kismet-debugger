@@ -1,32 +1,14 @@
 #include <string>
-#include <stdio.h>
 
 #include <GUI/GUITab.hpp>
 #include <Mod/CppUserModBase.hpp>
 #include <UE4SSProgram.hpp>
 #include <KismetDebugger.hpp>
 
-class MyTestTab : public GUI::GUITab
-{
-private:
-    RC::GUI::KismetDebugger::Debugger m_debugger{};
-
-public:
-    MyTestTab() : RC::GUI::GUITab()
-    {
-        TabName = L"Kismet Debugger";
-    }
-
-    auto render() -> void override
-    {
-        m_debugger.render();
-    }
-};
-
 class KismetDebuggerMod : public RC::CppUserModBase
 {
 private:
-    std::shared_ptr<MyTestTab> m_debugger_tab{};
+    RC::GUI::KismetDebugger::Debugger m_debugger{};
 
 public:
     KismetDebuggerMod() : CppUserModBase()
@@ -38,21 +20,10 @@ public:
 
         UE4SS_ENABLE_IMGUI()
 
-        m_debugger_tab = std::make_shared<MyTestTab>();
-        UE4SSProgram::get_program().add_gui_tab(m_debugger_tab);
+        register_tab(STR("Kismet Debugger"), [](CppUserModBase* mod) { dynamic_cast<KismetDebuggerMod*>(mod)->m_debugger.render(); });
     }
 
-    ~KismetDebuggerMod()
-    {
-        if (m_debugger_tab)
-            UE4SSProgram::get_program().remove_gui_tab(m_debugger_tab);
-    }
-    auto on_program_start() -> void override
-    {
-    }
-    auto on_update() -> void override
-    {
-    }
+    ~KismetDebuggerMod() override = default;
 };
 
 #define MY_AWESOME_MOD_API __declspec(dllexport)
