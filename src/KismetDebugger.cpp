@@ -908,6 +908,21 @@ namespace RC::GUI::KismetDebugger
         while (m_index < m_script_size) render_expr();
     }
 
+    auto ScriptRenderContext::render_object()
+    {
+        UObject *object = read_object();
+        if (object)
+        {
+            ImGui::Text("%s", to_string(object->GetFullName()).c_str());
+        }
+        else
+        {
+            ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255,0,0,255));
+            ImGui::Text("NULL object");
+            ImGui::PopStyleColor();
+        }
+    }
+
     auto ScriptRenderContext::render_property()
     {
         FProperty* property = (FProperty*)read_object();
@@ -987,11 +1002,13 @@ namespace RC::GUI::KismetDebugger
                 render_expr();
                 break;
             }
+            case EX_MetaCast:
+            case EX_DynamicCast:
             case EX_ObjToInterfaceCast:
             case EX_CrossInterfaceCast:
             case EX_InterfaceToObjCast:
             {
-                (UClass*)read_object();
+                render_object();
                 render_expr();
                 break;
             }
@@ -1017,13 +1034,13 @@ namespace RC::GUI::KismetDebugger
             }
             case EX_StructMemberContext:
             {
-                (FProperty*)read_object();        // struct member expr.
+                render_property(); // struct member expr.
                 render_expr();
                 break;
             }
             case EX_Jump:
             {
-                read<uint32_t>();
+                ImGui::Text("%u", read<uint32_t>());
                 break;
             }
             case EX_ComputedJump:
@@ -1048,7 +1065,7 @@ namespace RC::GUI::KismetDebugger
             }
             case EX_PushExecutionFlow:
             {
-                read<uint32_t>();
+                ImGui::Text("%u", read<uint32_t>());
                 break;
             }
             case EX_Nothing:
@@ -1102,8 +1119,9 @@ namespace RC::GUI::KismetDebugger
             case EX_CallMath:
             case EX_LocalFinalFunction:
             case EX_FinalFunction:
+            case EX_CallMulticastDelegate:
             {
-                (UFunction*)read_object();
+                render_object();
                 while(render_expr() != EX_EndFunctionParms);
                 break;
             }
@@ -1125,13 +1143,8 @@ namespace RC::GUI::KismetDebugger
                 */
 
                 FName n = read_name();
+                ImGui::Text("%s", to_string(n.ToString()).c_str());
                 while(render_expr() != EX_EndFunctionParms);    // Parms.
-                break;
-            }
-            case EX_CallMulticastDelegate:
-            {
-                (UFunction*)read_object();
-                while(render_expr() != EX_EndFunctionParms); // Parms.
                 break;
             }
             case EX_ClassContext:
@@ -1188,12 +1201,20 @@ namespace RC::GUI::KismetDebugger
             }
             case EX_StringConst:
             {
-                while (read<uint8_t>());
+                std::string s;
+                while (char c = read<uint8_t>())
+                    s.push_back(c);
+
+                ImGui::Text("\"%s\"", s.c_str());
                 break;
             }
             case EX_UnicodeStringConst:
             {
-                while (read<uint16_t>());
+                std::wstring s;
+                while (wchar_t c = read<uint16_t>())
+                    s.push_back(c);
+
+                ImGui::Text("\"%s\"", to_string(s).c_str());
                 break;
             }
             case EX_TextConst:
@@ -1214,7 +1235,7 @@ namespace RC::GUI::KismetDebugger
                         render_expr();
                         break;
                     case 4: // StringTableEntry
-                        read_object();
+                        render_object();
                         render_expr();
                         render_expr();
                         break;
@@ -1223,7 +1244,7 @@ namespace RC::GUI::KismetDebugger
             }
             case EX_ObjectConst:
             {
-                read_object();
+                render_object();
                 break;
             }
             case EX_SoftObjectConst:
@@ -1239,6 +1260,7 @@ namespace RC::GUI::KismetDebugger
             case EX_NameConst:
             {
                 FName n = read_name();
+                ImGui::Text("%s", to_string(n.ToString()).c_str());
                 break;
             }
             case EX_RotationConst:
@@ -1267,7 +1289,7 @@ namespace RC::GUI::KismetDebugger
             }
             case EX_StructConst:
             {
-                (UScriptStruct*)read_object();    // Struct.
+                render_object();
                 read<int32_t>();
                 while(render_expr() != EX_EndStructConst);
                 break;
@@ -1301,47 +1323,39 @@ namespace RC::GUI::KismetDebugger
                 break;
             case EX_ArrayConst:
             {
-                (FProperty*)read_object();    // Inner property
+                render_property();    // Inner property
                 read<int32_t>();
                 while (render_expr() != EX_EndArrayConst);
                 break;
             }
             case EX_SetConst:
             {
-                (FProperty*)read_object();    // Inner property
+                render_property();    // Inner property
                 read<int32_t>();
                 while (render_expr() != EX_EndSetConst);
                 break;
             }
             case EX_MapConst:
             {
-                (FProperty*)read_object();    // Key property
-                (FProperty*)read_object();    // Val property
+                render_property();    // Key property
+                render_property();    // Val property
                 read<int32_t>();
                 while (render_expr() != EX_EndMapConst);
                 break;
             }
             case EX_ByteConst:
+            {
+                ImGui::Text("%u", read<uint8_t>());
+                break;
+            }
             case EX_IntConstByte:
             {
-                read<int8_t>();
-                break;
-            }
-            case EX_MetaCast:
-            {
-                (UClass*)read_object();
-                render_expr();
-                break;
-            }
-            case EX_DynamicCast:
-            {
-                (UClass*)read_object();
-                render_expr();
+                ImGui::Text("%d", read<int8_t>());
                 break;
             }
             case EX_JumpIfNot:
             {
-                read<uint32_t>();
+                ImGui::Text("%u", read<uint32_t>());
                 render_expr(); // Boolean expr.
                 break;
             }
@@ -1366,11 +1380,13 @@ namespace RC::GUI::KismetDebugger
             case EX_InstanceDelegate:
             {
                 FName n = read_name();
+                ImGui::Text("%s", to_string(n.ToString()).c_str());
                 break;
             }
             case EX_BindDelegate:
             {
                 FName n = read_name();
+                ImGui::Text("%s", to_string(n.ToString()).c_str());
                 render_expr();    // Delegate property to assign to
                 render_expr();
                 break;
