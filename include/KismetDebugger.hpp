@@ -86,6 +86,7 @@ namespace RC::GUI::KismetDebugger
         auto render() -> void;
 
     private:
+        auto render_object();
         auto render_property();
         auto render_expr() -> EExprToken;
 
