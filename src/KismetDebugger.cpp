@@ -26,6 +26,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <misc/cpp/imgui_stdlib.h>
+#include <glaze/glaze.hpp>
 
 namespace RC::GUI::KismetDebugger
 {
@@ -87,67 +88,29 @@ namespace RC::GUI::KismetDebugger
     }
     auto BreakpointStore::load(std::filesystem::path& path) -> void
     {
-        auto file = File::open(path, File::OpenFor::Reading, File::OverwriteExistingFile::No, File::CreateIfNonExistent::Yes);
+        m_save_path = path;
 
-        auto breakpoints = JSON::Parser::parse(file);
+        JsonBreakpoints breakpoints{};
+        auto ec = glz::read_file_json(breakpoints, path.string(), std::string{});
 
-        for (const auto& [fn, bps] : breakpoints->get())
+        for (const auto& [fn, bps] : breakpoints)
         {
-            for (const auto& bp : bps->as<JSON::Array>()->get())
+            auto wfn = to_wstring(fn);
+            for (const auto& bp : bps)
             {
-                auto number = bp->as<JSON::Number>();
-                size_t index;
-                switch (number->m_stored_type)
-                {
-                case JSON::Number::Type::UInt32:
-                    index = (size_t) number->get<uint32_t>();
-                    break;
-                case JSON::Number::Type::UInt64:
-                    index = (size_t) number->get<uint64_t>();
-                    break;
-                case JSON::Number::Type::Int32:
-                    index = (size_t) number->get<int32_t>();
-                    break;
-                case JSON::Number::Type::Int64:
-                    index = (size_t) number->get<int64_t>();
-                    break;
-                case JSON::Number::Type::Float:
-                    index = (size_t) number->get<float>();
-                    break;
-                case JSON::Number::Type::Double:
-                    index = (size_t) number->get<double>();
-                    break;
-                }
-
-                add_breakpoint(fn, index);
+                add_breakpoint(wfn, bp);
             }
         }
-
-        file.close();
-
-        m_save_path = path;
     }
     auto BreakpointStore::save() -> void
     {
         if (const auto& out_path = m_save_path)
         {
-            auto config = JSON::Object{};
-
-            for (const auto& fn : m_breakpoints_by_name) {
-                if (fn.second)
-                {
-                    auto& json_bps = config.new_array(fn.first);
-                    for (const auto& bp : *fn.second) {
-                        json_bps.new_number<int32_t>((int32_t) bp);
-                    }
-                }
+            JsonBreakpoints breakpoints{};
+            for (const auto& [fn, bps] : m_breakpoints_by_name) {
+                if (bps) breakpoints[to_string(fn)] = *bps;
             }
-
-            auto json_file = File::open(*out_path, File::OpenFor::Writing, File::OverwriteExistingFile::Yes, File::CreateIfNonExistent::Yes);
-            int32_t indent_level{};
-            const auto& str = config.serialize(JSON::ShouldFormat::Yes, &indent_level);
-            json_file.write_string_to_file(str);
-            json_file.close();
+            auto ec = glz::write_file_json(breakpoints, (*out_path).string(), std::string{});
         }
     }
     auto BreakpointStore::has_breakpoint(UFunction* fn, size_t index) -> bool

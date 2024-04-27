@@ -23,6 +23,8 @@ namespace RC::GUI::KismetDebugger
         FFrame* stack{};
     };
 
+    typedef std::unordered_map<std::string, std::unordered_set<size_t>> JsonBreakpoints;
+
     class BreakpointStore
     {
     public:
